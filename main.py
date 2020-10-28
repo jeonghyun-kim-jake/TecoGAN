@@ -11,7 +11,6 @@ import tensorflow as tf
 from tensorflow.python.util import deprecation
 deprecation._PRINT_DEPRECATION_WARNINGS = False
 import random as rn
-
 # fix all randomness, except for multi-treading or GPU process
 os.environ['PYTHONHASHSEED'] = '0'
 np.random.seed(42)
@@ -26,6 +25,7 @@ from lib.dataloader import inference_data_loader, frvsr_gpu_data_loader
 from lib.frvsr import generator_F, fnet
 from lib.Teco import FRVSR, TecoGAN
 
+import cv2
 
 Flags = tf.app.flags
 
@@ -122,6 +122,8 @@ if not os.path.exists(FLAGS.output_dir):
 if not os.path.exists(FLAGS.summary_dir):
     os.mkdir(FLAGS.summary_dir)
 
+
+print("--->")
 # custom Logger to write Log to file
 class Logger(object):
     def __init__(self):
@@ -251,7 +253,15 @@ if FLAGS.mode == 'inference':
         srtime = 0
         print('Frame evaluation starts!!')
         for i in range(max_iter):
-            input_im = np.array([inference_data.inputs[i]]).astype(np.float32)
+            print("{} --> {} ".format(i ,inference_data.inputs[i].shape))
+            # dst_w = inference_data.inputs[i].shape[2]
+            # dst_h = inference_data.inputs[i].shape[1]
+            # height, width, channel = 
+            dst_h, dst_w, channel = inference_data.inputs[i].shape
+
+            resized = cv2.resize(inference_data.inputs[i], dsize=(input_shape[2], input_shape[1]), interpolation=cv2.INTER_AREA)
+            # input_im = np.array([inference_data.inputs[i]]).astype(np.float32)
+            input_im = np.array([resized]).astype(np.float32)
             feed_dict={inputs_raw: input_im}
             t0 = time.time()
             if(i != 0):
@@ -259,14 +269,17 @@ if FLAGS.mode == 'inference':
             output_frame = sess.run(outputs, feed_dict=feed_dict)
             srtime += time.time()-t0
             
-            if(i >= 5): 
-                name, _ = os.path.splitext(os.path.basename(str(inference_data.paths_LR[i])))
-                filename = FLAGS.output_name+'_'+name
-                print('saving image %s' % filename)
-                out_path = os.path.join(image_dir, "%s.%s"%(filename,FLAGS.output_ext))
-                save_img(out_path, output_frame[0])
-            else:# First 5 is a hard-coded symmetric frame padding, ignored but time added!
-                print("Warming up %d"%(5-i))
+            # if(i >= 5): 
+            name, _ = os.path.splitext(os.path.basename(str(inference_data.paths_LR[i])))
+            filename = name
+            print('saving image %s' % filename)
+            out_path = os.path.join(image_dir, "%s.%s"%(filename,FLAGS.output_ext))
+
+            result = cv2.resize(output_frame[0], dsize=(dst_w, dst_h), interpolation=cv2.INTER_AREA)
+            
+            save_img(out_path, result)
+            # else:# First 5 is a hard-coded symmetric frame padding, ignored but time added!
+            #     print("Warming up %d"%(5-i))
     print( "total time " + str(srtime) + ", frame number " + str(max_iter) )
         
 # The training mode
